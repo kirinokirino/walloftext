@@ -21,6 +21,9 @@ pub struct Game {
     counter: usize,
     display_buffer: [[Tile; 80]; 40],
 
+    cursor: Cursor,
+    commands: Vec<Command>,
+
     viewport_size: UVec2,
 }
 
@@ -28,13 +31,17 @@ impl Game {
     pub fn new(config: Config) -> Self {
         let viewport_size = UVec2::new(config.window_width, config.window_height);
         let buffer = [[Tile::new(' '); 80]; 40];
+        let cursor = Cursor::new('a', Color::WHITE, Color::BLACK, 0, 0);
         Self {
             config,
             images: Vec::new(),
             spritesheets: Vec::new(),
+            counter: 0,
             display_buffer: buffer,
 
-            counter: 0,
+			cursor,
+			commands: Vec::new(),
+
             viewport_size,
         }
     }
@@ -71,6 +78,19 @@ impl Game {
 
     pub fn update(&mut self, current_frame: u64) {
         self.counter += 1;
+		
+        for command in std::mem::take(&mut self.commands).into_iter() {
+			match command {
+				Command::Write => self.display_cursor(),
+				other => (),
+			}
+        }
+    }
+
+    fn display_cursor(&mut self) {
+		let Cursor { character, foreground, background, x, y } = self.cursor;
+    
+		self.display_string(&character.to_string(), UVec2::new(x.into(), y.into()), &foreground, &background);
     }
 
     fn draw_char(
@@ -106,8 +126,20 @@ impl Game {
     }
 
     pub fn apply_command(&mut self, command: &str) {
-		// implement communication protocol here
-		
+		let commands = command.split('-');
+		for command in commands {
+			let words = command.split(' ');
+			for word in words {
+				self.apply_word(word);
+			}
+		}
+    }
+
+    pub fn apply_word(&mut self, word: &str) {
+		match word {
+			"w" => self.commands.push(Command::Write),
+			_ => (),
+		}
     }
 
     pub fn draw(&self, graphics: &mut Graphics2D) {
@@ -121,6 +153,30 @@ impl Game {
             }
         }
     }
+}
+
+#[derive(Clone,Copy, Debug)]
+enum Command {
+	Write,
+}
+
+#[derive(Clone, Debug)]
+struct Cursor {
+	character: char,
+	foreground: Color,
+	background: Color,
+	x: u8,
+	y: u8,
+}
+
+impl Cursor {
+	pub const fn new(character: char, foreground: Color, background: Color, x: u8, y: u8) -> Self {
+		Self {
+			character, foreground, background, x, y
+		}
+	}
+
+	
 }
 
 #[derive(Copy, Clone, Debug)]
