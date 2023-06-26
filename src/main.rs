@@ -24,7 +24,15 @@ use std::io::{self, BufRead, BufReader};
 use std::sync::mpsc;
 use std::thread;
 
+mod server;
+use server::spawn_server_thread;
+
 fn main() {
+
+    thread::spawn(move || {
+    	spawn_server_thread();
+    });
+    
     let (tx, rx) = mpsc::channel::<String>();
     thread::spawn(move || {
         tx.send("started loop".to_string()).unwrap();
