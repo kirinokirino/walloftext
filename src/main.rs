@@ -63,10 +63,12 @@ use std::net::TcpStream;
 pub fn start_client() -> io::Result<()> {
     for i in 0..10 {
         let mut stream = TcpStream::connect("127.0.0.1:2434")?;
-        let action = if i == 9 {
+        let action = if i == 0 {
             AppRequest::GetKeyboard
-        } else {
+        } else if i == 1 {
             AppRequest::Ping
+        } else {
+			AppRequest::Command(String::from("w r w r w r w r w r w r w d d l l l l l l l l l"))
         };
         let mut input = serde_json::to_string(&action).unwrap();
         stream.write_all(input.as_bytes())?;

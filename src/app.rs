@@ -44,6 +44,7 @@ pub enum AppRequest {
     Shutdown,
     GetKeyboard,
     Ping,
+    Command(String),
 }
 
 impl App {
@@ -140,6 +141,9 @@ impl App {
 			},
 			AppRequest::GetKeyboard => {
 				stream.write_all(serde_json::to_string(&self.keyboard).unwrap().as_bytes()).unwrap();
+			},
+			AppRequest::Command(command) => {
+				self.game.apply_command(&command);
 			},
 			other => {
         		stream.write_all(b"ERROR")?;
