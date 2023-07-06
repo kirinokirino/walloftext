@@ -138,6 +138,9 @@ impl App {
 				self.is_shutting_down = true;
         		stream.write_all(b"OK")?;
 			},
+			AppRequest::GetKeyboard => {
+				stream.write_all(serde_json::to_string(&self.keyboard).unwrap().as_bytes()).unwrap();
+			},
 			other => {
         		stream.write_all(b"ERROR")?;
 				panic!("{}", format!("Unhandled app request: {other:?}"));
@@ -276,6 +279,7 @@ impl WindowHandler for App {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Keyboard {
     pub buffer: Vec<char>,
     pub modifiers: ModifiersState,

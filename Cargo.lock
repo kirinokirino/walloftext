@@ -813,6 +813,8 @@ dependencies = [
  "image",
  "log",
  "num-traits",
+ "serde",
+ "serde_json",
  "smallvec",
  "wasm-bindgen",
  "web-sys",

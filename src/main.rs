@@ -64,7 +64,7 @@ pub fn start_client() -> io::Result<()> {
     for i in 0..10 {
         let mut stream = TcpStream::connect("127.0.0.1:2434")?;
         let action = if i == 9 {
-            AppRequest::Shutdown
+            AppRequest::GetKeyboard
         } else {
             AppRequest::Ping
         };
@@ -72,7 +72,7 @@ pub fn start_client() -> io::Result<()> {
         stream.write_all(input.as_bytes())?;
         let mut reader = BufReader::new(&stream);
         let mut buffer: Vec<u8> = Vec::new();
-        reader.read_until(b'\n', &mut buffer)?;
+        reader.read_until(b'\0', &mut buffer)?;
         println!("read from server:{}", std::str::from_utf8(&buffer).unwrap());
     	stream.shutdown(std::net::Shutdown::Both)?;
     }
