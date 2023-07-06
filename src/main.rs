@@ -28,7 +28,7 @@ fn main() {
     thread::Builder::new()
         .name("app_client thread".to_string())
         .spawn(move || {
-            thread::sleep(std::time::Duration::from_millis(1500));
+            thread::sleep(std::time::Duration::from_millis(500));
             start_client().unwrap();
         });
     let (tx, rx) = mpsc::channel::<String>();
@@ -56,27 +56,37 @@ fn main() {
     window.run_loop(App::new(window_size, config, rx));
 }
 
-use crate::app::AppRequest;
+use crate::app::{AppRequest, Keyboard};
+use speedy2d::window::VirtualKeyCode;
 use std::io::{prelude::*, Write};
 use std::net::TcpStream;
 
 pub fn start_client() -> io::Result<()> {
-    for i in 0..10 {
+    loop {
         let mut stream = TcpStream::connect("127.0.0.1:2434")?;
-        let action = if i == 0 {
-            AppRequest::GetKeyboard
-        } else if i == 1 {
-            AppRequest::Ping
-        } else {
-			AppRequest::Command(String::from("w r w r w r w r w r w r w d d l l l l l l l l l"))
-        };
-        let mut input = serde_json::to_string(&action).unwrap();
-        stream.write_all(input.as_bytes())?;
+        let action = AppRequest::GetKeyboard;
+        stream.write_all(serde_json::to_string(&action).unwrap().as_bytes())?;
         let mut reader = BufReader::new(&stream);
         let mut buffer: Vec<u8> = Vec::new();
-        reader.read_until(b'\0', &mut buffer)?;
-        println!("read from server:{}", std::str::from_utf8(&buffer).unwrap());
-    	stream.shutdown(std::net::Shutdown::Both)?;
+        reader.read_until(b'\0', &mut buffer);
+        let result = std::str::from_utf8(&buffer).unwrap();
+        let kbd: Keyboard = serde_json::from_str(result).unwrap();
+
+        stream.shutdown(std::net::Shutdown::Both)?;
+        let mut stream = TcpStream::connect("127.0.0.1:2434")?;
+        
+        let game_command = if kbd.pressed.contains(&VirtualKeyCode::U) {
+            "r"
+        } else if kbd.pressed.contains(&VirtualKeyCode::O) {
+            "l"
+        } else if kbd.pressed.contains(&VirtualKeyCode::Period) {
+            "u"
+        } else if kbd.pressed.contains(&VirtualKeyCode::E) {
+            "d"
+        } else { "w" };
+		let action = AppRequest::Command(game_command.to_string());
+        stream.write_all(serde_json::to_string(&action).unwrap().as_bytes())?;
+        stream.shutdown(std::net::Shutdown::Both)?;
     }
     Ok(())
 }

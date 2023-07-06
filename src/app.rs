@@ -103,7 +103,7 @@ impl App {
     }
 
     pub fn serve(&mut self) {
-    	let listener =  self.tcp_listener.try_clone().unwrap();
+        let listener = self.tcp_listener.try_clone().unwrap();
         for stream in listener.incoming() {
             match stream {
                 Ok(stream) => {
@@ -132,25 +132,27 @@ impl App {
         let recieved = dbg!(recieved.trim_end_matches('\0'));
         let deserialized: AppRequest = serde_json::from_str(&recieved).unwrap();
         match deserialized {
-			AppRequest::Ping => {
-        		stream.write_all(b"Pong")?;
-			},
-			AppRequest::Shutdown => {
-				self.is_shutting_down = true;
-        		stream.write_all(b"OK")?;
-			},
-			AppRequest::GetKeyboard => {
-				stream.write_all(serde_json::to_string(&self.keyboard).unwrap().as_bytes()).unwrap();
-			},
-			AppRequest::Command(command) => {
-				self.game.apply_command(&command);
-			},
-			other => {
-        		stream.write_all(b"ERROR")?;
-				panic!("{}", format!("Unhandled app request: {other:?}"));
-			}
+            AppRequest::Ping => {
+                stream.write_all(b"Pong")?;
+            }
+            AppRequest::Shutdown => {
+                self.is_shutting_down = true;
+                stream.write_all(b"OK")?;
+            }
+            AppRequest::GetKeyboard => {
+                stream
+                    .write_all(serde_json::to_string(&self.keyboard).unwrap().as_bytes())
+                    .unwrap();
+            }
+            AppRequest::Command(command) => {
+                self.game.apply_command(&command);
+            }
+            other => {
+                stream.write_all(b"ERROR")?;
+                panic!("{}", format!("Unhandled app request: {other:?}"));
+            }
         }
-        stream.write(&[b'\0'])?;
+        //stream.write(&[b'\0'])?;
         Ok(())
     }
 
