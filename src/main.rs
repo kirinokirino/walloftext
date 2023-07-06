@@ -24,15 +24,13 @@ use std::io::{self, BufRead, BufReader};
 use std::sync::mpsc;
 use std::thread;
 
-mod server;
-use server::spawn_server_thread;
-
 fn main() {
-
-    thread::spawn(move || {
-    	spawn_server_thread();
-    });
-    
+    thread::Builder::new()
+        .name("app_client thread".to_string())
+        .spawn(move || {
+            thread::sleep(std::time::Duration::from_millis(1500));
+            start_client().unwrap();
+        });
     let (tx, rx) = mpsc::channel::<String>();
     thread::spawn(move || {
         tx.send("started loop".to_string()).unwrap();
@@ -56,4 +54,27 @@ fn main() {
     )
     .expect("Wasn't able to create a window!");
     window.run_loop(App::new(window_size, config, rx));
+}
+
+use crate::app::AppRequest;
+use std::io::{prelude::*, Write};
+use std::net::TcpStream;
+
+pub fn start_client() -> io::Result<()> {
+    for i in 0..10 {
+        let mut stream = TcpStream::connect("127.0.0.1:2434")?;
+        let action = if i == 9 {
+            AppRequest::Shutdown
+        } else {
+            AppRequest::Ping
+        };
+        let mut input = serde_json::to_string(&action).unwrap();
+        stream.write_all(input.as_bytes())?;
+        let mut reader = BufReader::new(&stream);
+        let mut buffer: Vec<u8> = Vec::new();
+        reader.read_until(b'\n', &mut buffer)?;
+        println!("read from server:{}", std::str::from_utf8(&buffer).unwrap());
+    	stream.shutdown(std::net::Shutdown::Both)?;
+    }
+    Ok(())
 }

@@ -9,7 +9,11 @@ use speedy2d::{
     Graphics2D,
 };
 
-use std::sync::mpsc::{Receiver, TryRecvError};
+use serde::{Deserialize, Serialize};
+
+use std::io::{self, BufReader, Read, Write};
+use std::net::{TcpListener, TcpStream};
+use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 
 use crate::{
     game::Game,
@@ -25,16 +29,31 @@ pub struct App {
     keyboard: Keyboard,
     is_fullscreen: bool,
     is_inputting_text: bool,
+    is_shutting_down: bool,
 
-    channel: Receiver<String>,
+    stdin_channel: Receiver<String>,
+    tcp_listener: TcpListener,
 
     screenshot: Screenshot,
 
     game: Game,
 }
 
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
+pub enum AppRequest {
+    Shutdown,
+    GetKeyboard,
+    Ping,
+}
+
 impl App {
     pub fn new(viewport_size: UVec2, config: crate::config::Config, rx: Receiver<String>) -> Self {
+        let mut tcp_listener =
+            TcpListener::bind("127.0.0.1:2434").expect("Couldn't bind to port 2434");
+        tcp_listener
+            .set_nonblocking(true)
+            .expect("Cannot set tcp_listener non-blocking");
+
         Self {
             viewport_size,
 
@@ -44,8 +63,10 @@ impl App {
             keyboard: Keyboard::new(),
             is_fullscreen: false,
             is_inputting_text: false,
+            is_shutting_down: false,
 
-            channel: rx,
+            stdin_channel: rx,
+            tcp_listener,
 
             screenshot: Screenshot::new("screenshots".to_string()),
 
@@ -54,12 +75,13 @@ impl App {
     }
 
     pub fn game_loop(&mut self, helper: &mut WindowHelper<()>, graphics: &mut Graphics2D) {
-        if self.keyboard.pressed.contains(&VirtualKeyCode::Escape) {
+        if self.keyboard.pressed.contains(&VirtualKeyCode::Escape) || self.is_shutting_down {
             helper.terminate_loop();
         }
         if self.current_frame == 0 {
             self.setup(graphics);
         }
+        self.serve();
         self.input();
 
         self.update();
@@ -79,14 +101,60 @@ impl App {
         self.game.setup(graphics);
     }
 
+    pub fn serve(&mut self) {
+    	let listener =  self.tcp_listener.try_clone().unwrap();
+        for stream in listener.incoming() {
+            match stream {
+                Ok(stream) => {
+                    //stream.set_nonblocking(true).expect("set_nonblocking call failed");
+                    if let Err(e) = self.handle_connection(stream) {
+                        eprintln!("{e:?}");
+                    }
+                }
+                Err(e) => match e.kind() {
+                    io::ErrorKind::WouldBlock => break,
+                    e => eprintln!("{e:?}"),
+                },
+            }
+        }
+    }
+
+    pub fn handle_connection(&mut self, mut stream: TcpStream) -> io::Result<()> {
+        let mut buf = [0; 512];
+        let bytes_read = stream.read(&mut buf)?;
+
+        if bytes_read == 0 {
+            return Ok(());
+        }
+
+        let recieved = String::from_utf8_lossy(&buf);
+        let recieved = dbg!(recieved.trim_end_matches('\0'));
+        let deserialized: AppRequest = serde_json::from_str(&recieved).unwrap();
+        match deserialized {
+			AppRequest::Ping => {
+        		stream.write_all(b"Pong")?;
+			},
+			AppRequest::Shutdown => {
+				self.is_shutting_down = true;
+        		stream.write_all(b"OK")?;
+			},
+			other => {
+        		stream.write_all(b"ERROR")?;
+				panic!("{}", format!("Unhandled app request: {other:?}"));
+			}
+        }
+        stream.write(&[b'\0'])?;
+        Ok(())
+    }
+
     pub fn input(&mut self) {
         self.game
             .input(self.viewport_size, &self.mouse, &self.keyboard);
 
-        let res = self.channel.try_recv();
+        let res = self.stdin_channel.try_recv();
         match res {
             Ok(value) => self.game.apply_command(&value),
-            Err(TryRecvError::Disconnected) => panic!("disconnected from stdin!"),
+            Err(TryRecvError::Disconnected) => eprintln!("disconnected from stdin!"),
             Err(TryRecvError::Empty) => (),
         }
     }

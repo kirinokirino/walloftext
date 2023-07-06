@@ -181,7 +181,7 @@ impl Game {
             "d" => self.commands.push(Command::Down),
             "l" => self.commands.push(Command::Left),
             "r" => self.commands.push(Command::Right),
-            _ => (),
+            other => self.display_string(word, UVec2::new(0, 40), &Color::BLUE, &Color::WHITE),
         }
     }
 
